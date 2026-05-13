@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { BookOpen, Mail } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { Toast } from "@/components/Toast";
 import type { Toast as ToastType } from "@/lib/types";
 
@@ -19,6 +19,14 @@ export default function AuthPage() {
 
   async function handleEmailAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isSupabaseConfigured) {
+      setToast({
+        type: "error",
+        message: "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
+      });
+      return;
+    }
+
     setIsLoading(true);
     setToast(null);
 
@@ -47,6 +55,14 @@ export default function AuthPage() {
   }
 
   async function handleGoogleAuth() {
+    if (!isSupabaseConfigured) {
+      setToast({
+        type: "error",
+        message: "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
+      });
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/dashboard` },
@@ -72,6 +88,12 @@ export default function AuthPage() {
             ? "New users receive exactly 1,000 free credits on signup."
             : "Return to your notes feed and credit balance."}
         </p>
+
+        {!isSupabaseConfigured ? (
+          <div className="mt-5 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+            Add your Supabase URL and anon key in `.env.local`, then restart the dev server.
+          </div>
+        ) : null}
 
         <form onSubmit={handleEmailAuth} className="mt-6 space-y-4">
           {mode === "signup" ? (
