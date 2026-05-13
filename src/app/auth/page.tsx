@@ -8,6 +8,15 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { Toast } from "@/components/Toast";
 import type { Toast as ToastType } from "@/lib/types";
 
+function withTimeout<T>(promise: Promise<T>, message: string, timeoutMs = 12000) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+}
+
 export default function AuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("signup");
@@ -30,28 +39,43 @@ export default function AuthPage() {
     setIsLoading(true);
     setToast(null);
 
-    const result =
-      mode === "signup"
-        ? await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { name } },
-          })
-        : await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const result =
+        mode === "signup"
+          ? await withTimeout(
+              supabase.auth.signUp({
+                email,
+                password,
+                options: { data: { name } },
+              }),
+              "Signup is taking too long. Check your Supabase Auth settings and internet connection."
+            )
+          : await withTimeout(
+              supabase.auth.signInWithPassword({ email, password }),
+              "Login is taking too long. Check your Supabase Auth settings and internet connection."
+            );
 
-    setIsLoading(false);
+      if (result.error) {
+        setToast({ type: "error", message: result.error.message });
+        return;
+      }
 
-    if (result.error) {
-      setToast({ type: "error", message: result.error.message });
-      return;
+      if (mode === "signup" && !result.data.session) {
+        setToast({ type: "success", message: "Account created. Please confirm your email, then login." });
+        setMode("login");
+        return;
+      }
+
+      setToast({ type: "success", message: mode === "signup" ? "Account created!" : "Welcome back!" });
+      router.push("/dashboard");
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Authentication failed. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    setToast({
-      type: "success",
-      message: mode === "signup" ? "Account created. Check your email if confirmation is enabled." : "Welcome back!",
-    });
-
-    router.push("/dashboard");
   }
 
   async function handleGoogleAuth() {
