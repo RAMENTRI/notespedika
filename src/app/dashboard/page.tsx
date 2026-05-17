@@ -13,6 +13,15 @@ import type { DocumentRow, Profile, Toast as ToastType } from "@/lib/types";
 
 const UPLOAD_REWARD = 50;
 
+function withTimeout<T>(promise: PromiseLike<T>, message: string, timeoutMs = 20000) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+}
+
 export default function DashboardPage() {
   return (
     <AuthGuard>
@@ -92,6 +101,10 @@ function Dashboard() {
 
   async function handleUpload(payload: { title: string; description: string; file: File }) {
     if (!profile) {
+      showToast({
+        type: "error",
+        message: "Your profile is still loading or was not created. Sign out, login again, then retry.",
+      });
       return;
     }
 
@@ -104,33 +117,43 @@ function Dashboard() {
     const safeName = payload.file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
     const storagePath = `${profile.id}/${crypto.randomUUID()}-${safeName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("documents")
-      .upload(storagePath, payload.file, { contentType: "application/pdf" });
+    try {
+      const { error: uploadError } = await withTimeout(
+        supabase.storage.from("documents").upload(storagePath, payload.file, { contentType: "application/pdf" }),
+        "PDF upload is taking too long. Check the Supabase storage bucket and policies."
+      );
 
-    if (uploadError) {
+      if (uploadError) {
+        showToast({ type: "error", message: uploadError.message });
+        return;
+      }
+
+      const { data, error } = await withTimeout(
+        supabase.rpc("create_document_with_credit", {
+          p_title: payload.title,
+          p_description: payload.description,
+          p_storage_path: storagePath,
+        }),
+        "Credit update is taking too long. Confirm the Supabase SQL setup has been run."
+      );
+
+      if (error) {
+        showToast({ type: "error", message: error.message });
+        return;
+      }
+
+      setProfile((current) => (current ? { ...current, credits: Number(data) } : current));
+      setIsUploadOpen(false);
+      await loadDashboard();
+      showToast({ type: "success", message: `File uploaded successfully! +${UPLOAD_REWARD} credits` });
+    } catch (error) {
+      showToast({
+        type: "error",
+        message: error instanceof Error ? error.message : "Upload failed. Please try again.",
+      });
+    } finally {
       setIsUploading(false);
-      showToast({ type: "error", message: uploadError.message });
-      return;
     }
-
-    const { data, error } = await supabase.rpc("create_document_with_credit", {
-      p_title: payload.title,
-      p_description: payload.description,
-      p_storage_path: storagePath,
-    });
-
-    setIsUploading(false);
-
-    if (error) {
-      showToast({ type: "error", message: error.message });
-      return;
-    }
-
-    setProfile((current) => (current ? { ...current, credits: Number(data) } : current));
-    setIsUploadOpen(false);
-    await loadDashboard();
-    showToast({ type: "success", message: `File uploaded successfully! +${UPLOAD_REWARD} credits` });
   }
 
   async function handleDownload(document: DocumentRow) {

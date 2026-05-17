@@ -21,11 +21,14 @@ export function UploadModal({ isOpen, isUploading, onClose, onSubmit }: UploadMo
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) {
+    const form = event.currentTarget;
+    const selectedFile = (form.elements.namedItem("file") as HTMLInputElement | null)?.files?.[0] ?? file;
+
+    if (!selectedFile) {
       return;
     }
 
-    await onSubmit({ title, description, file });
+    await onSubmit({ title, description, file: selectedFile });
     setTitle("");
     setDescription("");
     setFile(null);
@@ -75,6 +78,7 @@ export function UploadModal({ isOpen, isUploading, onClose, onSubmit }: UploadMo
             <span className="text-sm font-semibold text-ink">PDF File</span>
             <input
               required
+              name="file"
               type="file"
               accept="application/pdf,.pdf"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
@@ -84,7 +88,7 @@ export function UploadModal({ isOpen, isUploading, onClose, onSubmit }: UploadMo
 
           <button
             type="submit"
-            disabled={isUploading || !file}
+            disabled={isUploading}
             className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-md bg-mint-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-mint-500 disabled:bg-slate-300"
           >
             <FileUp className="h-4 w-4" aria-hidden="true" />
