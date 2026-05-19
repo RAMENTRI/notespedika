@@ -52,19 +52,21 @@ function Dashboard() {
       return;
     }
 
-    const [{ data: profileData, error: profileError }, { data: documentData, error: documentError }] =
-      await Promise.all([
-        supabase.from("users").select("*").eq("id", user.id).single(),
-        supabase
-          .from("documents")
-          .select("*, users(name, email)")
-          .order("created_at", { ascending: false }),
-      ]);
+    const [{ data: profileData, error: profileError }, { data: documentData, error: documentError }] = await Promise.all([
+      supabase.rpc("ensure_user_profile"),
+      supabase
+        .from("documents")
+        .select("*, users(name, email)")
+        .order("created_at", { ascending: false }),
+    ]);
 
     if (profileError) {
-      showToast({ type: "error", message: profileError.message });
+      showToast({
+        type: "error",
+        message: `${profileError.message}. Run the updated supabase/schema.sql in Supabase SQL Editor.`,
+      });
     } else {
-      setProfile(profileData);
+      setProfile(profileData as Profile);
     }
 
     if (documentError) {
@@ -114,12 +116,28 @@ function Dashboard() {
     }
 
     setIsUploading(true);
-    const safeName = payload.file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-    const storagePath = `${profile.id}/${crypto.randomUUID()}-${safeName}`;
 
     try {
+      const { data: repairedProfile, error: profileError } = await withTimeout(
+        supabase.rpc("ensure_user_profile"),
+        "Profile setup is taking too long. Confirm the updated Supabase SQL has been run."
+      );
+
+      if (profileError) {
+        showToast({
+          type: "error",
+          message: `${profileError.message}. Run the updated supabase/schema.sql in Supabase SQL Editor.`,
+        });
+        return;
+      }
+
+      const uploadProfile = (repairedProfile as Profile) ?? profile;
+      const safeName = payload.file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+      const storagePath = `${uploadProfile.id}/${crypto.randomUUID()}-${safeName}`;
       const { error: uploadError } = await withTimeout(
-        supabase.storage.from("documents").upload(storagePath, payload.file, { contentType: "application/pdf" }),
+        supabase.storage.from("documents").upload(storagePath, payload.file, {
+          contentType: "application/pdf",
+        }),
         "PDF upload is taking too long. Check the Supabase storage bucket and policies."
       );
 

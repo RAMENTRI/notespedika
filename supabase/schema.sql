@@ -91,6 +91,58 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+create or replace function public.ensure_user_profile()
+returns public.users
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user auth.users%rowtype;
+  inserted_user_id uuid;
+  profile_row public.users%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  select * into current_user
+  from auth.users
+  where id = auth.uid();
+
+  if current_user.id is null then
+    raise exception 'Authenticated user not found.';
+  end if;
+
+  insert into public.users (id, name, email, credits)
+  values (
+    current_user.id,
+    coalesce(current_user.raw_user_meta_data ->> 'name', current_user.raw_user_meta_data ->> 'full_name'),
+    current_user.email,
+    1000
+  )
+  on conflict (id) do update
+  set name = coalesce(public.users.name, excluded.name),
+      email = coalesce(public.users.email, excluded.email)
+  returning id into inserted_user_id;
+
+  insert into public.transactions (user_id, action, credit_change)
+  select current_user.id, 'signup', 1000
+  where not exists (
+    select 1
+    from public.transactions
+    where user_id = current_user.id
+      and action = 'signup'
+  );
+
+  select * into profile_row
+  from public.users
+  where id = current_user.id;
+
+  return profile_row;
+end;
+$$;
+
 create or replace function public.create_document_with_credit(
   p_title text,
   p_description text,
@@ -112,6 +164,8 @@ begin
   if lower(right(p_storage_path, 4)) <> '.pdf' then
     raise exception 'Only PDF files are supported.';
   end if;
+
+  perform public.ensure_user_profile();
 
   insert into public.documents (uploader_id, title, description, storage_path, file_url)
   values (auth.uid(), trim(p_title), nullif(trim(p_description), ''), p_storage_path, p_storage_path)
@@ -168,6 +222,7 @@ begin
 end;
 $$;
 
+grant execute on function public.ensure_user_profile() to authenticated;
 grant execute on function public.create_document_with_credit(text, text, text) to authenticated;
 grant execute on function public.process_document_download(uuid) to authenticated;
 
