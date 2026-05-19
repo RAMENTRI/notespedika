@@ -2,15 +2,17 @@ import { NextRequest } from "next/server";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-const blockedHeaders = new Set([
-  "accept-encoding",
-  "connection",
-  "content-encoding",
-  "content-length",
-  "host",
-  "origin",
-  "referer",
+const allowedRequestHeaders = new Set([
+  "accept",
+  "apikey",
+  "authorization",
+  "content-type",
+  "prefer",
+  "x-client-info",
+  "x-upsert",
 ]);
+
+const blockedResponseHeaders = new Set(["connection", "content-encoding", "content-length"]);
 
 async function proxySupabaseRequest(request: NextRequest) {
   if (!supabaseUrl) {
@@ -31,20 +33,31 @@ async function proxySupabaseRequest(request: NextRequest) {
 
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    if (!blockedHeaders.has(key.toLowerCase())) {
+    if (allowedRequestHeaders.has(key.toLowerCase())) {
       headers.set(key, value);
     }
   });
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body: request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer(),
-  });
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer(),
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error: "Supabase proxy request failed.",
+        detail: error instanceof Error ? error.message : "Unknown fetch error.",
+      },
+      { status: 502 }
+    );
+  }
 
   const responseHeaders = new Headers();
   response.headers.forEach((value, key) => {
-    if (!blockedHeaders.has(key.toLowerCase())) {
+    if (!blockedResponseHeaders.has(key.toLowerCase())) {
       responseHeaders.set(key, value);
     }
   });
