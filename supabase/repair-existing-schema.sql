@@ -4,6 +4,23 @@ alter table public.users
   add column if not exists credits integer not null default 1000,
   add column if not exists created_at timestamptz not null default now();
 
+do $$
+declare
+  user_column record;
+begin
+  for user_column in
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'users'
+      and is_nullable = 'NO'
+      and column_name not in ('id', 'credits', 'created_at')
+  loop
+    execute format('alter table public.users alter column %I drop not null', user_column.column_name);
+  end loop;
+end;
+$$;
+
 alter table public.documents
   add column if not exists uploader_id uuid references public.users(id) on delete cascade,
   add column if not exists title text,
