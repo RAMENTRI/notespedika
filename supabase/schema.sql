@@ -98,7 +98,7 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user auth.users%rowtype;
+  auth_user_row auth.users%rowtype;
   inserted_user_id uuid;
   profile_row public.users%rowtype;
 begin
@@ -106,19 +106,19 @@ begin
     raise exception 'Authentication required.';
   end if;
 
-  select * into current_user
+  select * into auth_user_row
   from auth.users
   where id = auth.uid();
 
-  if current_user.id is null then
+  if auth_user_row.id is null then
     raise exception 'Authenticated user not found.';
   end if;
 
   insert into public.users (id, name, email, credits)
   values (
-    current_user.id,
-    coalesce(current_user.raw_user_meta_data ->> 'name', current_user.raw_user_meta_data ->> 'full_name'),
-    current_user.email,
+    auth_user_row.id,
+    coalesce(auth_user_row.raw_user_meta_data ->> 'name', auth_user_row.raw_user_meta_data ->> 'full_name'),
+    auth_user_row.email,
     1000
   )
   on conflict (id) do update
@@ -127,17 +127,17 @@ begin
   returning id into inserted_user_id;
 
   insert into public.transactions (user_id, action, credit_change)
-  select current_user.id, 'signup', 1000
+  select auth_user_row.id, 'signup', 1000
   where not exists (
     select 1
     from public.transactions
-    where user_id = current_user.id
+    where user_id = auth_user_row.id
       and action = 'signup'
   );
 
   select * into profile_row
   from public.users
-  where id = current_user.id;
+  where id = auth_user_row.id;
 
   return profile_row;
 end;
