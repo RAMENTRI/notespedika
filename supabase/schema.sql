@@ -8,6 +8,12 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
+alter table public.users
+  add column if not exists name text,
+  add column if not exists email text,
+  add column if not exists credits integer not null default 1000 check (credits >= 0),
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   uploader_id uuid not null references public.users(id) on delete cascade,
@@ -20,6 +26,16 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 
+alter table public.documents
+  add column if not exists uploader_id uuid references public.users(id) on delete cascade,
+  add column if not exists title text,
+  add column if not exists description text,
+  add column if not exists file_url text not null default '',
+  add column if not exists storage_path text,
+  add column if not exists file_type text not null default 'application/pdf',
+  add column if not exists download_cost integer not null default 10,
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
@@ -29,6 +45,15 @@ create table if not exists public.transactions (
   created_at timestamptz not null default now()
 );
 
+alter table public.transactions
+  add column if not exists user_id uuid references public.users(id) on delete cascade,
+  add column if not exists action text,
+  add column if not exists credit_change integer,
+  add column if not exists document_id uuid references public.documents(id) on delete set null,
+  add column if not exists created_at timestamptz not null default now();
+
+create unique index if not exists users_email_unique_idx on public.users(email);
+create unique index if not exists documents_storage_path_unique_idx on public.documents(storage_path);
 create index if not exists documents_created_at_idx on public.documents(created_at desc);
 create index if not exists documents_uploader_id_idx on public.documents(uploader_id);
 create index if not exists transactions_user_id_idx on public.transactions(user_id);
