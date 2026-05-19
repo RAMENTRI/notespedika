@@ -26,10 +26,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 3. In Supabase, open SQL Editor and run `supabase/schema.sql`.
 
-4. Enable authentication providers:
+4. Enable authentication:
 
 - Email/password: Supabase Dashboard > Authentication > Providers > Email
-- Google OAuth: Supabase Dashboard > Authentication > Providers > Google, then add your client ID and secret
 
 5. Run the app:
 
@@ -51,9 +50,8 @@ Then open `http://localhost:3000`.
 - `process_document_download(...)` checks the current user's credits atomically, subtracts the document cost, and writes a transaction. The UI creates a short-lived signed URL only after the RPC succeeds.
 - Storage bucket `documents` is private, PDF-only, and allows authenticated users to upload to their own folder.
 
-## Important Supabase URLs
+## Important Supabase URL
 
-For OAuth redirects in development, add these URLs in Supabase Authentication settings:
+In Supabase Authentication settings, set the Site URL for development:
 
 - Site URL: `http://localhost:3000`
-- Redirect URL: `http://localhost:3000/dashboard`

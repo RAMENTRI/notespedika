@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
-import { BookOpen, Mail } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { BookOpen } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { Toast } from "@/components/Toast";
 import type { Toast as ToastType } from "@/lib/types";
@@ -17,12 +17,6 @@ function withTimeout<T>(promise: Promise<T>, message: string, timeoutMs = 12000)
   ]);
 }
 
-type AuthSettings = {
-  external?: {
-    google?: boolean;
-  };
-};
-
 export default function AuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("signup");
@@ -30,34 +24,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleEnabled, setIsGoogleEnabled] = useState(false);
   const [toast, setToast] = useState<ToastType | null>(null);
-
-  useEffect(() => {
-    async function loadAuthSettings() {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        return;
-      }
-
-      try {
-        const response = await withTimeout(
-          fetch(`/api/supabase-proxy?url=${encodeURIComponent(`${supabaseUrl}/auth/v1/settings`)}`, {
-            headers: { apikey: supabaseAnonKey },
-          }),
-          "Could not load Supabase auth settings."
-        );
-        const settings = (await response.json()) as AuthSettings;
-        setIsGoogleEnabled(Boolean(settings.external?.google));
-      } catch {
-        setIsGoogleEnabled(false);
-      }
-    }
-
-    loadAuthSettings();
-  }, []);
 
   async function handleEmailAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -108,33 +75,6 @@ export default function AuthPage() {
       });
     } finally {
       setIsLoading(false);
-    }
-  }
-
-  async function handleGoogleAuth() {
-    if (!isSupabaseConfigured) {
-      setToast({
-        type: "error",
-        message: "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.",
-      });
-      return;
-    }
-
-    if (!isGoogleEnabled) {
-      setToast({
-        type: "error",
-        message: "Google login is not enabled in Supabase. Enable the Google provider in Authentication > Providers.",
-      });
-      return;
-    }
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
-    });
-
-    if (error) {
-      setToast({ type: "error", message: error.message });
     }
   }
 
@@ -207,15 +147,6 @@ export default function AuthPage() {
             {isLoading ? "Please wait..." : mode === "signup" ? "Signup and get 1,000 credits" : "Login"}
           </button>
         </form>
-
-        <button
-          type="button"
-          onClick={handleGoogleAuth}
-          className="focus-ring mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-3 font-semibold text-ink transition hover:border-brand-100 disabled:bg-slate-100 disabled:text-slate-400"
-        >
-          <Mail className="h-4 w-4" aria-hidden="true" />
-          {isGoogleEnabled ? "Continue with Google" : "Google login not enabled"}
-        </button>
 
         <button
           type="button"
