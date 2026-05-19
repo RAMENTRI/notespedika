@@ -53,6 +53,23 @@ alter table public.documents
   add column if not exists download_cost integer not null default 10,
   add column if not exists created_at timestamptz not null default now();
 
+do $$
+declare
+  document_column record;
+begin
+  for document_column in
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'documents'
+      and is_nullable = 'NO'
+      and column_name not in ('id', 'uploader_id', 'title', 'file_url', 'storage_path', 'file_type', 'download_cost', 'created_at')
+  loop
+    execute format('alter table public.documents alter column %I drop not null', document_column.column_name);
+  end loop;
+end;
+$$;
+
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
@@ -68,6 +85,23 @@ alter table public.transactions
   add column if not exists credit_change integer,
   add column if not exists document_id uuid references public.documents(id) on delete set null,
   add column if not exists created_at timestamptz not null default now();
+
+do $$
+declare
+  transaction_column record;
+begin
+  for transaction_column in
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'transactions'
+      and is_nullable = 'NO'
+      and column_name not in ('id', 'user_id', 'action', 'credit_change', 'created_at')
+  loop
+    execute format('alter table public.transactions alter column %I drop not null', transaction_column.column_name);
+  end loop;
+end;
+$$;
 
 create unique index if not exists users_email_unique_idx on public.users(email);
 create unique index if not exists documents_storage_path_unique_idx on public.documents(storage_path);
