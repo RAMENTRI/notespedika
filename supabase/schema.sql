@@ -76,13 +76,14 @@ begin
     new.email,
     1000
   )
-  on conflict (id) do nothing;
-
-  insert into public.transactions (user_id, action, credit_change)
-  values (new.id, 'signup', 1000)
-  on conflict do nothing;
+  on conflict (id) do update
+  set name = coalesce(public.users.name, excluded.name),
+      email = coalesce(public.users.email, excluded.email);
 
   return new;
+exception
+  when others then
+    return new;
 end;
 $$;
 
@@ -99,7 +100,6 @@ set search_path = public
 as $$
 declare
   auth_user_row auth.users%rowtype;
-  inserted_user_id uuid;
   profile_row public.users%rowtype;
 begin
   if auth.uid() is null then
@@ -124,7 +124,7 @@ begin
   on conflict (id) do update
   set name = coalesce(public.users.name, excluded.name),
       email = coalesce(public.users.email, excluded.email)
-  returning id into inserted_user_id;
+  returning * into profile_row;
 
   insert into public.transactions (user_id, action, credit_change)
   select auth_user_row.id, 'signup', 1000
